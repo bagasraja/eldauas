@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitoring Listrik PZEM-004T</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js" type="text/javascript"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            text-align: center;
+            padding: 20px;
+        }
+        h1 { margin-bottom: 20px; color: #00d2ff; }
+        .status { font-size: 0.9em; color: #888; margin-bottom: 30px; }
+        .status span { color: #ff3b3b; font-weight: bold; }
+        
+        /* Grid Layout */
+        .container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background-color: #1e1e1e;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            border: 1px solid #333;
+        }
+
+        .card h3 { margin: 0; font-size: 1em; color: #aaaaaa; }
+        .card .value { font-size: 2em; font-weight: bold; margin: 10px 0; color: #fff; }
+        .card .unit { font-size: 0.8em; color: #00d2ff; }
+        
+        /* Warna khusus untuk nilai */
+        #val-power { color: #ffeb3b; } /* Kuning untuk Watt */
+        #val-energy { color: #4caf50; } /* Hijau untuk kWh */
+    </style>
+</head>
+<body>
+
+    <h1>Dashboard Listrik Real-Time</h1>
+    <div class="status">Status Koneksi: <span id="status-text">Disconnect</span></div>
+
+    <div class="container">
+        <div class="card">
+            <h3>Tegangan</h3>
+            <div class="value" id="val-voltage">0</div>
+            <div class="unit">Volt</div>
+        </div>
+        
+        <div class="card">
+            <h3>Arus</h3>
+            <div class="value" id="val-current">0</div>
+            <div class="unit">Ampere</div>
+        </div>
+
+        <div class="card">
+            <h3>Daya Aktif</h3>
+            <div class="value" id="val-power">0</div>
+            <div class="unit">Watt</div>
+        </div>
+
+        <div class="card">
+            <h3>Energi Total</h3>
+            <div class="value" id="val-energy">0</div>
+            <div class="unit">kWh</div>
+        </div>
+
+        <div class="card">
+            <h3>Frekuensi</h3>
+            <div class="value" id="val-frek">0</div>
+            <div class="unit">Hz</div>
+        </div>
+
+        <div class="card">
+            <h3>Power Factor</h3>
+            <div class="value" id="val-pf">0</div>
+            <div class="unit">PF</div>
+        </div>
+    </div>
+
+    <script>
+        // --- KONFIGURASI MQTT ---
+        // Karena GitHub Pages menggunakan HTTPS, kita WAJIB pakai WSS (Secure WebSocket)
+        const broker = "broker.emqx.io";
+        const port = 8084; // Port WSS (Secure) untuk EMQX
+        const topic = "iot/pzem/data"; 
+        
+        // Buat ID Client acak agar tidak bentrok
+        const clientID = "web_monitor_" + Math.random().toString(16).substr(2, 8);
+
+        const client = new Paho.MQTT.Client(broker, port, clientID);
+
+        // Handler ketika koneksi putus
+        client.onConnectionLost = function (responseObject) {
+            document.getElementById("status-text").innerText = "Terputus!";
+            document.getElementById("status-text").style.color = "red";
+            console.log("Koneksi hilang: " + responseObject.errorMessage);
+        };
+
+        // Handler ketika pesan masuk
+        client.onMessageArrived = function (message) {
+            console.log("Data masuk: " + message.payloadString);
+            try {
+                const data = JSON.parse(message.payloadString);
+                
+                // Update tampilan HTML
+                document.getElementById("val-voltage").innerText = data.tegangan;
+                document.getElementById("val-current").innerText = data.arus;
+                document.getElementById("val-power").innerText   = data.daya;
+                document.getElementById("val-energy").innerText  = data.energi;
+                document.getElementById("val-frek").innerText    = data.frekuensi;
+                document.getElementById("val-pf").innerText      = data.pf;
+
+            } catch (e) {
+                console.error("Format data salah!", e);
+            }
+        };
+
+        // Fungsi koneksi
+        function startConnection() {
+            document.getElementById("status-text").innerText = "Menghubungkan...";
+            document.getElementById("status-text").style.color = "orange";
+
+            client.connect({
+                useSSL: true, // Wajib True untuk GitHub Pages
+                onSuccess: function () {
+                    document.getElementById("status-text").innerText = "Terhubung";
+                    document.getElementById("status-text").style.color = "#00ff00";
+                    
+                    // Subscribe ke topik
+                    client.subscribe(topic);
+                    console.log("Berhasil subscribe ke " + topic);
+                },
+                onFailure: function (e) {
+                    document.getElementById("status-text").innerText = "Gagal Konek";
+                    console.log("Gagal konek: " + e.errorMessage);
+                }
+            });
+        }
+
+        // Mulai koneksi saat halaman dimuat
+        startConnection();
+    </script>
+</body>
+</html>
